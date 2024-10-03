@@ -1,6 +1,7 @@
 const express = require("express");
 const router = new express.Router()
 const db = require('../db');
+const slugify = require("slugify");
 const ExpressError = require("../expressError");
 
 
@@ -15,44 +16,74 @@ router.get('/', async (req, res, next) => {
 
 router.get('/:code', async (req, res, next) => {
     try {
-        const { code } = req.params
-        const companyResult = await db.query(`SELECT * FROM companies WHERE code = $1`, [code])
+        const { code } = req.params;
+        const companyResult = await db.query(`SELECT * FROM companies WHERE code = $1`, [code]);
+
         if (companyResult.rows.length === 0) {
-            throw new ExpressError(`Can't find the company with code ${code} `, 404)
+            throw new ExpressError(`Can't find the company with code ${code}`, 404);
         }
+
         const invoicesResult = await db.query(
             `SELECT id, comp_code, amt, paid, add_date, paid_date 
-       FROM invoices 
-       WHERE comp_code = $1`,
+             FROM invoices 
+             WHERE comp_code = $1`,
             [code]
         );
 
         const company = companyResult.rows[0];
-
         const invoices = invoicesResult.rows;
 
-        return res.json({
-            company: company,
-            invoices: invoices
-        })
+        return res.json({ company, invoices });
     } catch (e) {
-        next(e)
+        next(e);
     }
-})
+});
+
+
+// router.post('/', async (req, res, next) => {
+//     try {
+//         const { code, name, description } = req.body;
+
+//         const companyCheck = await db.query(`SELECT code FROM companies WHERE code = $1`, [code]);
+//         if (companyCheck.rows.length > 0) {
+//             throw new ExpressError(`Company with code ${code} already exists`, 400);
+//         }
+
+//         const results = await db.query(`INSERT INTO companies (code, name, description) VALUES ($1, $2, $3) RETURNING *`, [code, name, description]);
+
+//         return res.status(201).json({ company: results.rows[0] });
+//     } catch (e) {
+//         next(e);
+//     }
+// });
+
 
 router.post('/', async (req, res, next) => {
     try {
-        const { code, name, description } = req.body
-        const companyCheck = await db.query(`SELECT code FROM companies WHERE code = $1`, [comp_code]);
-        if (companyCheck.rows.length === 0) {
-            throw new ExpressError(`Company with code ${comp_code} not found`, 404);
+        const { name, description } = req.body;
+
+        const code = slugify(name, { lower: true, strict: true });
+
+
+        const companyCheck = await db.query(`SELECT code FROM companies WHERE code = $1`, [code]);
+        if (companyCheck.rows.length > 0) {
+            throw new ExpressError(`Company with code ${code} already exists`, 400);
         }
-        const results = await db.query(`INSERT INTO companies (code,name,description) VALUES ($1,$2,$3) RETURNING *`, [code, name, description])
-        return res.status(201).json({ company: results.rows[0] })
+
+
+        const results = await db.query(
+            `INSERT INTO companies (code, name, description) 
+             VALUES ($1, $2, $3) 
+             RETURNING *`,
+            [code, name, description]
+        );
+
+        return res.status(201).json({ company: results.rows[0] });
     } catch (e) {
-        next(e)
+        next(e);
     }
-})
+});
+
 
 router.put('/:code', async (req, res, next) => {
     try {
@@ -82,9 +113,4 @@ router.delete('/:code', async (req, res, next) => {
     }
 })
 
-
-
-
-
-
-module.exports = router;
+module.exports = router
